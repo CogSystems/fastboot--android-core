@@ -27,6 +27,8 @@
  */
 
 #define _LARGEFILE64_SOURCE
+#define __STDC_FORMAT_MACROS
+#define __STDC_LIMIT_MACROS
 
 #include <ctype.h>
 #include <errno.h>
@@ -295,6 +297,7 @@ void usage(void)
             "                                           Can override the fs type and/or\n"
             "                                           size the bootloader reports.\n"
             "  getvar <variable>                        display a bootloader variable\n"
+            "  download <file>                          download and boot raw image\n"
             "  boot <kernel> [ <ramdisk> [ <second> ] ] download and boot kernel\n"
             "  flash:raw boot <kernel> [ <ramdisk> [ <second> ] ] create bootimage and \n"
             "                                           flash it\n"
@@ -322,6 +325,28 @@ void usage(void)
             "  -S <size>[K|M|G]                         automatically sparse files greater\n"
             "                                           than size.  0 to disable\n"
         );
+}
+
+void *load_file_raw(const char *kernel, unsigned *sz)
+{
+    void *kdata = 0, *rdata = 0, *sdata = 0;
+    unsigned ksize = 0, rsize = 0, ssize = 0;
+    void *bdata;
+    unsigned bsize;
+
+    if(kernel == 0) {
+        fprintf(stderr, "no image specified\n");
+        return 0;
+    }
+
+    kdata = load_file(kernel, &ksize);
+    if(kdata == 0) {
+        fprintf(stderr, "cannot load '%s': %s\n", kernel, strerror(errno));
+        return 0;
+    }
+
+    *sz = ksize;
+    return kdata;
 }
 
 void *load_bootable_image(const char *kernel, const char *ramdisk,
@@ -393,10 +418,10 @@ static void* unzip_file(ZipArchiveHandle zip, const char* entry_name, unsigned* 
 {
     ZipEntryName zip_entry_name(entry_name);
     ZipEntry zip_entry;
-    if (FindEntry(zip, zip_entry_name, &zip_entry) != 0) {
+//    if (FindEntry(zip, zip_entry_name, &zip_entry) != 0) {
         fprintf(stderr, "archive does not contain '%s'\n", entry_name);
         return 0;
-    }
+//    }
 
     *sz = zip_entry.uncompressed_length;
 
@@ -408,7 +433,7 @@ static void* unzip_file(ZipArchiveHandle zip, const char* entry_name, unsigned* 
 
     int error = ExtractToMemory(zip, &zip_entry, data, zip_entry.uncompressed_length);
     if (error != 0) {
-        fprintf(stderr, "failed to extract '%s': %s\n", entry_name, ErrorCodeString(error));
+//        fprintf(stderr, "failed to extract '%s': %s\n", entry_name, ErrorCodeString(error));
         free(data);
         return 0;
     }
@@ -455,15 +480,15 @@ static int unzip_to_file(ZipArchiveHandle zip, char* entry_name) {
 
     ZipEntryName zip_entry_name(entry_name);
     ZipEntry zip_entry;
-    if (FindEntry(zip, zip_entry_name, &zip_entry) != 0) {
+//    if (FindEntry(zip, zip_entry_name, &zip_entry) != 0) {
         fprintf(stderr, "archive does not contain '%s'\n", entry_name);
         return -1;
-    }
+//    }
 
     int fd = fileno(fp);
     int error = ExtractEntryToFile(zip, &zip_entry, fd);
     if (error != 0) {
-        fprintf(stderr, "failed to extract '%s': %s\n", entry_name, ErrorCodeString(error));
+//        fprintf(stderr, "failed to extract '%s': %s\n", entry_name, ErrorCodeString(error));
         return -1;
     }
 
@@ -748,16 +773,18 @@ void do_update(usb_handle *usb, const char *filename, int erase_first)
     fb_queue_query_save("product", cur_product, sizeof(cur_product));
 
     ZipArchiveHandle zip;
-    int error = OpenArchive(filename, &zip);
+//    int error = OpenArchive(filename, &zip);
+int error = 1;
     if (error != 0) {
-        CloseArchive(zip);
-        die("failed to open zip file '%s': %s", filename, ErrorCodeString(error));
+//        CloseArchive(zip);
+//        die("failed to open zip file '%s': %s", filename, ErrorCodeString(error));
+die("failed zip");
     }
 
     unsigned sz;
     void* data = unzip_file(zip, "android-info.txt", &sz);
     if (data == 0) {
-        CloseArchive(zip);
+//        CloseArchive(zip);
         die("update package '%s' has no android-info.txt", filename);
     }
 
@@ -769,7 +796,7 @@ void do_update(usb_handle *usb, const char *filename, int erase_first)
             if (images[i].is_optional) {
                 continue;
             }
-            CloseArchive(zip);
+//            CloseArchive(zip);
             exit(1); // unzip_to_file already explained why.
         }
         fastboot_buffer buf;
@@ -786,7 +813,7 @@ void do_update(usb_handle *usb, const char *filename, int erase_first)
          */
     }
 
-    CloseArchive(zip);
+//    CloseArchive(zip);
 }
 
 void do_send_signature(char *fn)
@@ -947,7 +974,8 @@ void fb_perform_format(usb_handle* usb,
         pSize = (char *)size_override;
     }
 
-    gen = fs_get_generator(pType);
+//    gen = fs_get_generator(pType);
+gen = NULL;
     if (!gen) {
         if (skip_if_not_supported) {
             fprintf(stderr, "Erase successful, but not automatically formatting.\n");
@@ -961,7 +989,7 @@ void fb_perform_format(usb_handle* usb,
     pSz = strtoll(pSize, (char **)NULL, 16);
 
     fd = fileno(tmpfile());
-    if (fs_generator_generate(gen, fd, pSz)) {
+    if (1) { //fs_generator_generate(gen, fd, pSz)) {
         close(fd);
         fprintf(stderr, "Cannot generate image.\n");
         return;
@@ -1179,6 +1207,28 @@ int main(int argc, char **argv)
         } else if (!strcmp(*argv, "continue")) {
             fb_queue_command("continue", "resuming boot");
             skip(1);
+        } else if(!strcmp(*argv, "download")) {
+            char *kname = 0;
+            char *rname = 0;
+            char *sname = 0;
+            skip(1);
+            if (argc > 0) {
+                kname = argv[0];
+                skip(1);
+            }
+            if (argc > 0) {
+                rname = argv[0];
+                skip(1);
+            }
+            if (argc > 0) {
+                sname = argv[0];
+                skip(1);
+            }
+            data = load_file_raw(kname, &sz);
+            if (data == 0) return 1;
+            fb_queue_download("boot.img", data, sz);
+            //fb_queue_command("boot", "booting");
+            fb_queue_command("continue", "return to shell");
         } else if(!strcmp(*argv, "boot")) {
             char *kname = 0;
             char *rname = 0;

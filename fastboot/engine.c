@@ -112,13 +112,13 @@ int fb_format_supported(usb_handle *usb, const char *partition, const char *type
     int status;
 
     if (type_override) {
-        return !!fs_get_generator(type_override);
+        return NULL;//!!fs_get_generator(type_override);
     }
     status = fb_getvar(usb, fs_type, "partition-type:%s", partition);
     if (status) {
         return 0;
     }
-    return !!fs_get_generator(fs_type);
+    return NULL;//!!fs_get_generator(fs_type);
 }
 
 static int cb_default(Action *a, int status, char *resp)

@@ -29,7 +29,7 @@
 #ifndef _FASTBOOT_BOOTIMG_UTILS_H_
 #define _FASTBOOT_BOOTIMG_UTILS_H_
 
-#include <bootimg.h>
+#include "bootimg.h"
 
 #if defined(__cplusplus)
 extern "C" {
